@@ -24,6 +24,7 @@ SYSTEM_PROMPT = (
     "Trate os dados como monitoramento operacional autorizado de ambiente real. "
     "Responda em português do Brasil, de forma direta e útil. "
     "Use os eventos fornecidos como fonte principal. "
+    "Quando disponível, utilize também o contexto climático e de notícias para enriquecer a análise. "
     "Não invente dados que não aparecem no contexto. "
     "Não tente identificar pessoas; fale apenas sobre eventos, riscos e próximas ações. "
     "Quando fizer sentido, organize a resposta em: Leitura, Risco e Recomendação."
@@ -33,19 +34,16 @@ SYSTEM_PROMPT = (
 def build_event_context(events: list) -> str:
     if not events:
         return "Contexto operacional: nenhum evento registrado até o momento."
-
     recent = events[:AGENT_EVENT_LIMIT]
     total = len(recent)
     latest = recent[0]
     dist = Counter(e["label"] for e in recent)
     avg_conf = sum(e["confidence"] for e in recent) / total
-
     dist_str = ", ".join(f"{k}: {v}" for k, v in dist.most_common())
     lines = "\n".join(
         f"- #{e['id']} | {e['event_time']} | {e['label']} | conf: {e['confidence']:.2f}"
         for e in recent
     )
-
     return (
         f"Contexto operacional para o agente:\n"
         f"- Eventos considerados: {total}\n"
@@ -59,24 +57,25 @@ def build_event_context(events: list) -> str:
 def normalize_history(history: list) -> list:
     valid = []
     for msg in history:
-        if isinstance(msg, dict):
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-        else:
-            role = getattr(msg, "role", "")
-            content = getattr(msg, "content", "")
+        role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "role", "")
+        content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
         if role in ("user", "assistant") and content:
             valid.append({"role": role, "content": content})
     return valid[-MAX_HISTORY_MESSAGES:]
 
 
-def build_agent_messages(question: str, history: list, events: list) -> list:
-    return [
+def build_agent_messages(question: str, history: list, events: list, enrichment_context: str = "") -> list:
+    messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "system", "content": build_event_context(events)},
+    ]
+    if enrichment_context:
+        messages.append({"role": "system", "content": enrichment_context})
+    messages += [
         *normalize_history(history),
         {"role": "user", "content": question},
     ]
+    return messages
 
 
 def get_agent_status(events: list) -> dict:

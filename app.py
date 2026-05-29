@@ -10,6 +10,7 @@ from services.event_repository import init_db, list_events, count_events
 from services.video_monitor import start_monitor, get_last_frame, get_camera_status, generate_mjpeg
 from services.ollama_client import warmup_model, chat_stream, check_ollama
 from services.monitoring_agent import build_agent_messages, get_agent_status
+from services.scraping_service import fetch_weather, fetch_agro_news, get_enrichment_context
 from services.schemas import ChatRequest
 
 # =========================
@@ -97,7 +98,20 @@ def agent_status():
 @app.post("/chat")
 def chat(req: ChatRequest):
     events = list_events(50)
-    messages = build_agent_messages(req.question, req.history or [], events)
+
+    # Enriquece o contexto do agente com dados de scraping
+    try:
+        enrichment = get_enrichment_context()
+        enrichment_summary = enrichment.get("summary", "")
+    except Exception:
+        enrichment_summary = ""
+
+    messages = build_agent_messages(
+        req.question,
+        req.history or [],
+        events,
+        enrichment_context=enrichment_summary
+    )
 
     def stream_response():
         try:
@@ -115,3 +129,24 @@ def chat(req: ChatRequest):
 @app.get("/ollama/status")
 def ollama_status():
     return JSONResponse(content=check_ollama())
+
+
+# =========================
+# SCRAPING
+# =========================
+@app.get("/scraping/weather")
+def scraping_weather():
+    """Retorna previsão do tempo atual via Open-Meteo."""
+    return JSONResponse(content=fetch_weather())
+
+
+@app.get("/scraping/news")
+def scraping_news():
+    """Retorna notícias recentes do setor agropecuário via RSS."""
+    return JSONResponse(content=fetch_agro_news())
+
+
+@app.get("/scraping/context")
+def scraping_context():
+    """Retorna contexto consolidado (clima + notícias) para o agente."""
+    return JSONResponse(content=get_enrichment_context())

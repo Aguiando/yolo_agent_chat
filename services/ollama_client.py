@@ -5,26 +5,17 @@ from services.config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT, OLLAMA_KEE
 
 def warmup_model():
     try:
-        payload = {
-            "model": OLLAMA_MODEL,
-            "messages": [{"role": "user", "content": "ping"}],
-            "stream": False,
-            "keep_alive": OLLAMA_KEEP_ALIVE,
-        }
+        payload = {"model": OLLAMA_MODEL, "messages": [{"role": "user", "content": "ping"}],
+                   "stream": False, "keep_alive": OLLAMA_KEEP_ALIVE}
         with httpx.Client(timeout=30) as client:
             client.post(OLLAMA_URL, json=payload)
         print(f"[OLLAMA] Modelo '{OLLAMA_MODEL}' aquecido com sucesso.")
     except Exception as e:
-        print(f"[OLLAMA] Aviso: warmup falhou ({e}). O modelo será carregado na primeira pergunta.")
+        print(f"[OLLAMA] Aviso: warmup falhou ({e}).")
 
 
 def chat_stream(messages: list):
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": messages,
-        "stream": True,
-        "keep_alive": OLLAMA_KEEP_ALIVE,
-    }
+    payload = {"model": OLLAMA_MODEL, "messages": messages, "stream": True, "keep_alive": OLLAMA_KEEP_ALIVE}
     with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
         with client.stream("POST", OLLAMA_URL, json=payload) as response:
             response.raise_for_status()
